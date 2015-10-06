@@ -8,7 +8,8 @@
 #define NUM_ROWS MATRIX_SIZE // Number of rows in Matrix A
 
 // Matrix Structure declaration
-typedef struct {
+typedef struct
+{
 	//width of the matrix represented
     unsigned int num_columns;
 	//height of the matrix represented

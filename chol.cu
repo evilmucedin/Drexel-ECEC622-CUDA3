@@ -50,7 +50,8 @@ Matrix U_on_device_fast; // The upper triangular matrix computed by the device (
 int main(int argc, char** argv) 
 {	
 	// Check command line arguments
-	if(argc > 1){
+	if (argc > 1)
+    {
 		printf("Error. This program accepts no arguments. \n");
 		exit(0);
 	}		
@@ -60,10 +61,11 @@ int main(int argc, char** argv)
 
 	// Create the positive definite matrix. May require a few tries if we are unlucky
 	int success = 0;
-	while(!success){
+	while(!success)
+    {
 		A = create_positive_definite_matrix(MATRIX_SIZE, MATRIX_SIZE);
-		if(A.elements != NULL)
-				  success = 1;
+		if (A.elements != NULL)
+	        success = 1;
 	}
 
 	reference  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the CPU result
@@ -112,9 +114,11 @@ int main(int argc, char** argv)
 }
 
 //Error helper
-void check_for_error(char *msg){
+void check_for_error(const char* msg)
+{
 	cudaError_t err = cudaGetLastError();
-	if(cudaSuccess != err){
+	if (cudaSuccess != err)
+    {
 		printf("CUDA ERROR: %s (%s). \n", msg, cudaGetErrorString(err));
 		exit(EXIT_FAILURE);
 	}
@@ -130,10 +134,10 @@ void chol_on_device(const Matrix A, Matrix U)
 	
 	//A and U are already allocated on CPU already
 	//Allocate space on gpu
-	Matrix gpu_u = allocate_matrix_on_gpu( U );
+	Matrix gpu_u = allocate_matrix_on_gpu(U);
 
 	//Copy matrices to gpu, copy A right into U
-	copy_matrix_to_device( gpu_u, A );
+	copy_matrix_to_device(gpu_u, A);
 	
 	//Maximum size expected is 8192x8192
 	//Will be splitting the elimination i loop
@@ -153,23 +157,25 @@ void chol_on_device(const Matrix A, Matrix U)
 	int ops_per_thread = MATRIX_SIZE / (threads_per_block*num_blocks);
 	
 	printf("== GPU (Slow) ==\n");
-	printf("	Threads per block: %d\n",threads_per_block);
-	printf("	Number of blocks: %d\n",num_blocks);
-	printf("	Operations per thread: %d\n",ops_per_thread);
+	printf("	Threads per block: %d\n", threads_per_block);
+	printf("	Number of blocks: %d\n", num_blocks);
+	printf("	Operations per thread: %d\n", ops_per_thread);
 	
 	//Set up the execution grid on the GPU
 	dim3 thread_block(threads_per_block, 1, 1);
-	dim3 grid(num_blocks,1);
+	dim3 grid(num_blocks, 1);
 	
 	//Start timer after copy
 	sdkStartTimer(&timer_gpu);
+	check_for_error("SLOW KERNEL FAILURE 1\n");
 	
 	// Launch the kernel <<<grid, thread_block>>>
 	chol_kernel<<<grid, thread_block>>>(gpu_u.elements, ops_per_thread);
+	check_for_error("SLOW KERNEL FAILURE 2\n");
 	
-	//Sync at end and check for errors
+    //Sync at end and check for errors
 	cudaThreadSynchronize();
-	check_for_error("SLOW KERNEL FAILURE\n");
+	check_for_error("SLOW KERNEL FAILURE 3\n");
 	
 	//Stop timer before copy back
 	sdkStopTimer(&timer_gpu);
@@ -281,30 +287,38 @@ void chol_on_device_optimized(const Matrix A, Matrix U)
 }
 
 // Allocate a device matrix of same size as M.
-Matrix allocate_matrix_on_gpu(const Matrix M){
+Matrix allocate_matrix_on_gpu(const Matrix M)
+{
     Matrix Mdevice = M;
     int size = M.num_rows * M.num_columns * sizeof(float);
-    cudaMalloc((void**)&Mdevice.elements, size);
+    printf("allocating %d on gpu\n", static_cast<int>(size));
+    checkCudaErrors(cudaMalloc((void**)&Mdevice.elements, size));
     return Mdevice;
 }
-
 
 // Allocate a matrix of dimensions height*width
 //	If init == 0, initialize to all zeroes.  
 //	If init == 1, perform random initialization.
 Matrix allocate_matrix(int num_rows, int num_columns, int init)
 {
-    	Matrix M;
-    	M.num_columns = M.pitch = num_columns;
-    	M.num_rows = num_rows;
-    	int size = M.num_rows * M.num_columns;
+    Matrix M;
+    M.num_columns = M.pitch = num_columns;
+    M.num_rows = num_rows;
+    int size = M.num_rows * M.num_columns;
 		
-	M.elements = (float *) malloc(size * sizeof(float));
-	for(unsigned int i = 0; i < size; i++){
-		if(init == 0) M.elements[i] = 0; 
-		else
+	M.elements = (float*)malloc(size * sizeof(float));
+	for (unsigned int i = 0; i < size; i++)
+    {
+		if (init == 0)
+        {
+            M.elements[i] = 0; 
+        }
+        else
+        {
 			M.elements[i] = (float)rand()/(float)RAND_MAX;
+        }
 	}
+
     return M;
 }	
 
@@ -315,19 +329,20 @@ void copy_matrix_to_device(Matrix Mdevice, const Matrix Mhost)
     Mdevice.num_rows = Mhost.num_rows;
     Mdevice.num_columns = Mhost.num_columns;
     Mdevice.pitch = Mhost.pitch;
-    cudaMemcpy(Mdevice.elements, Mhost.elements, size, cudaMemcpyHostToDevice);
+    checkCudaErrors(cudaMemcpy(Mdevice.elements, Mhost.elements, size, cudaMemcpyHostToDevice));
 }
 
 // Copy a device matrix to a host matrix.
-void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice){
+void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice)
+{
     int size = Mdevice.num_rows * Mdevice.num_columns * sizeof(float);
-    cudaMemcpy(Mhost.elements, Mdevice.elements, size, cudaMemcpyDeviceToHost);
+    checkCudaErrors(cudaMemcpy(Mhost.elements, Mdevice.elements, size, cudaMemcpyDeviceToHost));
 }
 
 void check_error(const char *msg)
 {
 	cudaError_t err = cudaGetLastError();
-	if( cudaSuccess != err) 
+	if (cudaSuccess != err) 
 	{
 		printf("CUDA ERROR: %s (%s).\n", msg, cudaGetErrorString(err));
 		exit(EXIT_FAILURE);

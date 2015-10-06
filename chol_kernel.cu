@@ -1,14 +1,11 @@
 /*  Device code for Cholesky decomposition. */
 
-#ifndef _CHOL_KERNEL_H_
-#define _CHOL_KERNEL_H_
+#pragma once
 
 #include "chol.h"
 
 /* Edit this file to complete the functionality of Cholesky decomposition on the GPU. You may add addtional Kernel functions as needed. */
-
-
-__global__ void chol_kernel(float * U, int ops_per_thread)
+__global__ void chol_kernel(float* U, int ops_per_thread)
 {
 	//Determine the boundaries for this thread
 	//Get a thread identifier
@@ -22,17 +19,17 @@ __global__ void chol_kernel(float * U, int ops_per_thread)
 	//Contents of the A matrix should already be in U
 	
 	//Perform the Cholesky decomposition in place on the U matrix
-	for(k = 0; k < num_rows; k++)
+	for (k = 0; k < num_rows; k++)
 	{
 		//Only one thread does squre root and division
-		if(tx==0)
+		if (tx == 0)
 		{
 			// Take the square root of the diagonal element
 			U[k * num_rows + k] = sqrt(U[k * num_rows + k]);
 			//Don't bother doing check...live life on the edge!
 		
 			// Division step
-			for(j = (k + 1); j < num_rows; j++)
+			for (j = (k + 1); j < num_rows; j++)
 			{
 				U[k * num_rows + j] /= U[k * num_rows + k]; // Division step
 			}
@@ -52,15 +49,15 @@ __global__ void chol_kernel(float * U, int ops_per_thread)
 		//Starting index for this thread
 		int istart = tx*ops_per_thread + ibottom;
 		//Ending index for this thread
-		int iend = (istart + ops_per_thread)-1;
+		int iend = (istart + ops_per_thread) - 1;
 		
 		//Check boundaries, else do nothing
-		if( (istart >= ibottom) && (iend <= itop))
+		if ((istart >= ibottom) && (iend <= itop))
 		{
-			for(i = istart; i <= iend; i++)
+			for (i = istart; i <= iend; i++)
 			{
 				//Do work  for this i iteration
-				for(j = i; j < num_rows; j++)
+				for (j = i; j < num_rows; j++)
 				{
 					U[i * num_rows + j] -= U[k * num_rows + i] * U[k * num_rows + j];
 				}
@@ -89,12 +86,12 @@ __global__ void chol_kernel(float * U, int ops_per_thread)
 	int iend = (istart + ops_per_thread)-1;
 	
 	//Check boundaries, else do nothing
-	if( (istart >= ibottom) && (iend <= itop))
+	if ((istart >= ibottom) && (iend <= itop))
 	{
-		for(i = istart; i <= iend; i++)
+		for (i = istart; i <= iend; i++)
 		{
 			//Do work  for this i iteration
-			for(j = 0; j < i; j++)
+			for (j = 0; j < i; j++)
 			{
 				U[i * num_rows + j] = 0.0;
 			}
@@ -117,14 +114,14 @@ chol_kernel_optimized_div_old(float * U, int k, int stride)
 	unsigned int num_rows = MATRIX_SIZE;
 	
 	//Only let one thread do this
-	if(tx==0)
+	if (tx == 0)
 	{
 		// Take the square root of the diagonal element
 		U[k * num_rows + k] = sqrt(U[k * num_rows + k]);
 		//Don't bother doing check...live life on the edge!
 	
 		// Division step
-		for(j = (k + 1); j < num_rows; j++)
+		for (j = (k + 1); j < num_rows; j++)
 		{
 			U[k * num_rows + j] /= U[k * num_rows + k]; // Division step
 		}
@@ -145,7 +142,7 @@ chol_kernel_optimized_div(float * U, int k, int stride)
 	unsigned int num_rows = MATRIX_SIZE;
 	
 	//Only let one thread do this
-	if(tx==0)
+	if (tx==0)
 	{
 		// Take the square root of the diagonal element
 		U[k * num_rows + k] = sqrt(U[k * num_rows + k]);
@@ -170,9 +167,9 @@ chol_kernel_optimized_div(float * U, int k, int stride)
 	//Do work for this i iteration
 	//Division step
 	//Only let one thread block do this
-	if(blockIdx.x == 0)
+	if (blockIdx.x == 0)
 	{
-		for(j = jstart; (j >= jbottom) && (j <= jtop); j+=jstep)
+		for (j = jstart; (j >= jbottom) && (j <= jtop); j+=jstep)
 		{
 			U[k * num_rows + j] /= U[k * num_rows + k]; // Division step
 		}
@@ -180,7 +177,7 @@ chol_kernel_optimized_div(float * U, int k, int stride)
 }
 
 __global__ void 
-chol_kernel_optimized(float * U, int k, int stride)
+chol_kernel_optimized(float* U, int k, int stride)
 {
 	//With stride...
 	
@@ -210,7 +207,7 @@ chol_kernel_optimized(float * U, int k, int stride)
 	
 	//Do work for this i iteration
 	//Want to stride across
-	for(j = jstart; (j >= jbottom) && (j <= jtop); j+=jstep)
+	for (j = jstart; (j >= jbottom) && (j <= jtop); j+=jstep)
 	{
 		U[i * num_rows + j] -= U[k * num_rows + i] * U[k * num_rows + j];
 	}
@@ -256,5 +253,3 @@ chol_kernel_optimized_no_stride(float * U, int k, int stride)
 		U[i * num_rows + j] -= U[k * num_rows + i] * U[k * num_rows + j];
 	}
 }
-
-#endif // #ifndef _CHOL_KERNEL_H_
