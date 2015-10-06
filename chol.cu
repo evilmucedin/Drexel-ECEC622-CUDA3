@@ -16,9 +16,10 @@
 #include <helper_timer.h>
 #include <helper_image.h>
 
+#include "chol_gold.h"
+
 // includes, kernels
 #include "chol_kernel.cu"
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // declarations, forward
@@ -26,14 +27,10 @@ Matrix allocate_matrix_on_gpu(const Matrix M);
 Matrix allocate_matrix(int num_rows, int num_columns, int init);
 void copy_matrix_to_device(Matrix Mdevice, const Matrix Mhost);
 void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice);
-
-void check_error(const char *msg);
-
-extern Matrix create_positive_definite_matrix(unsigned int, unsigned int);
-extern "C" int chol_gold(const Matrix, Matrix);
-extern "C" int check_chol(const Matrix, const Matrix);
 void chol_on_device(const Matrix, Matrix);
 void chol_on_device_optimized(const Matrix, Matrix);
+
+void check_error(const char *msg);
 
 //Globals
 float time_cpu;
@@ -74,29 +71,29 @@ int main(int argc, char** argv)
 
     //Compute the Cholesky decomposition on the CPU
     StopWatchInterface* timer = NULL;
+    printf("== CPU ==\n");
     sdkCreateTimer(&timer);
     sdkStartTimer(&timer);
-    printf("== CPU ==\n");
-    int status = 1;
-    status = chol_gold(A, reference);
+    int status = chol_gold(A, reference);
     sdkStopTimer(&timer);
     time_cpu = 1e-3 * sdkGetTimerValue(&timer);
-    printf("    Run time:    %0.10f s. \n", time_cpu);
-    if (status == 0)
+    printf("    Run time:    %0.10f s. status=%d\n", time_cpu, status);
+    if (0 == status)
     {
         printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
         exit(0);
     }
 
-    /*
     printf("Double checking for correctness by recovering the original matrix. \n");
-    if(check_chol(A, reference) == 0){
+    if (check_chol(A, reference) == 0)
+    {
         printf("CPU: FAILED\n");
         exit(0);
     }
-    */
-    printf("    PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
-    
+    else
+    {
+        printf("    PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
+    }
 
     //Slow
     //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
@@ -319,7 +316,7 @@ Matrix allocate_matrix(int num_rows, int num_columns, int init)
         }
         else
         {
-            M.elements[i] = (float)rand()/(float)RAND_MAX - 0.5f;
+            M.elements[i] = (float)rand()/(float)RAND_MAX;
         }
     }
 

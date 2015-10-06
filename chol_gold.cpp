@@ -2,16 +2,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
-#include "chol.h"
+#include <memory.h>
 
-////////////////////////////////////////////////////////////////////////////////
-// export C interface
-extern "C" int chol_gold(const Matrix, Matrix);
-extern "C" int check_chol(const Matrix, const Matrix);
-Matrix matrix_multiply(const Matrix, const Matrix);
-extern void print_matrix(const Matrix);
-extern Matrix create_positive_definite_matrix(unsigned int, unsigned int);
-extern void print_matrix(const Matrix);
+#include "chol_gold.h"
 
 /* Prints the matrix out to screen. */
 void print_matrix(const Matrix M)
@@ -43,15 +36,21 @@ int check_if_diagonal_dominant(const Matrix M)
 {
     float diag_element;
     float sum;
-    for(unsigned int i = 0; i < M.num_rows; i++){
+    for (unsigned int i = 0; i < M.num_rows; i++)
+    {
         sum = 0.0; 
         diag_element = M.elements[i * M.num_rows + i];
-        for(unsigned int j = 0; j < M.num_columns; j++){
-            if(i != j)
+        for (unsigned int j = 0; j < M.num_columns; j++)
+        {
+            if (i != j)
+            {
                 sum += abs(M.elements[i * M.num_rows + j]);
+            }
         }
-        if(diag_element <= sum)
+        if (diag_element <= sum)
+        {
             return 0;
+        }
     }
 
     return 1;
@@ -89,13 +88,15 @@ Matrix create_positive_definite_matrix(unsigned int num_rows, unsigned int num_c
     size = transpose.num_rows * transpose.num_columns;
     transpose.elements = (float *)malloc(size * sizeof(float));
 
-    for(i = 0; i < M.num_rows; i++)
+    for (i = 0; i < M.num_rows; i++)
         for(j = 0; j < M.num_columns; j++)
             transpose.elements[i * M.num_rows + j] = M.elements[j * M.num_columns + i];
     // print_matrix(transpose);
 
-    for(i = 0; i < size; i++)
+    for (i = 0; i < size; i++)
+    {
         M.elements[i] += transpose.elements[i];
+    }
     if (check_if_symmetric(M))
     {
         printf("done. \n");
@@ -147,39 +148,37 @@ Matrix create_positive_definite_matrix(unsigned int num_rows, unsigned int num_c
 int chol_gold(const Matrix A, Matrix U)
 {
     unsigned int i, j, k; 
-    unsigned int size = A.num_rows * A.num_columns;
+    const unsigned int size = A.num_rows * A.num_columns;
 
     // Copy the contents of the A matrix into the working matrix U
-    for (i = 0; i < size; ++i)
-    {
-        U.elements[i] = A.elements[i];
-    }
+    memcpy(U.elements, A.elements, size*sizeof(A.elements[0]));
 
     // Perform the Cholesky decomposition in place on the U matrix
     for (k = 0; k < U.num_rows; k++) 
     {
-        // Take the square root of the diagonal element
-        U.elements[k * U.num_rows + k] = sqrt(U.elements[k * U.num_rows + k]);
         if (U.elements[k * U.num_rows + k] <= 0)
         {
             printf("Cholesky decomposition failed. \n");
+            return 0;
         }
-        return 0;
-    }
+        
+        // Take the square root of the diagonal element
+        U.elements[k * U.num_rows + k] = sqrt(U.elements[k * U.num_rows + k]);
+    
       
-    // Division step
-    for (j = (k + 1); j < U.num_rows; j++)
-    {
-        U.elements[k * U.num_rows + j] /= U.elements[k * U.num_rows + k]; // Division step
-    }
-                 
-
-      // Elimination step
-    for (i = (k + 1); i < U.num_rows; i++)
-    {
-        for (j = i; j < U.num_rows; j++)
+        // Division step
+        for (j = (k + 1); j < U.num_rows; j++)
         {
-            U.elements[i * U.num_rows + j] -= U.elements[k * U.num_rows + i] * U.elements[k * U.num_rows + j];
+            U.elements[k * U.num_rows + j] /= U.elements[k * U.num_rows + k]; // Division step
+        }
+                 
+        // Elimination step
+        for (i = (k + 1); i < U.num_rows; i++)
+        {
+            for (j = i; j < U.num_rows; j++)
+            {
+                U.elements[i * U.num_rows + j] -= U.elements[k * U.num_rows + i] * U.elements[k * U.num_rows + j];
+            }
         }
     }
 
@@ -187,7 +186,9 @@ int chol_gold(const Matrix A, Matrix U)
     for (i = 0; i < U.num_rows; i++)
     {
         for (j = 0; j < i; j++)
+        {
             U.elements[i * U.num_rows + j] = 0.0;
+        }
     }
 
     // printf("The Upper triangular matrix is: \n");
@@ -203,12 +204,12 @@ int check_chol(const Matrix A, const Matrix U)
     U_transpose.num_columns = U_transpose.pitch = U.num_columns;
     U_transpose.num_rows = U.num_rows; 
     unsigned int size = U_transpose.num_rows * U_transpose.num_columns;
-    U_transpose.elements = (float *)malloc(size * sizeof(float));
+    U_transpose.elements = (float*)malloc(size * sizeof(float));
 
     // Determine the transpose of U
     unsigned int i, j;
-    for(i = 0; i < U.num_rows; i++)
-        for(j = 0; j < U.num_columns; j++)
+    for (i = 0; i < U.num_rows; i++)
+        for (j = 0; j < U.num_columns; j++)
             U_transpose.elements[i * U.num_rows + j] = U.elements[j * U.num_columns + i];
 
     // Multiply U and U_transpose
@@ -230,22 +231,26 @@ int check_chol(const Matrix A, const Matrix U)
 /* Helper function that multiplies two given matrices and returns the result. */
 Matrix matrix_multiply(const Matrix A, const Matrix B)
 {
-          Matrix C;
-          C.num_columns = C.pitch = A.num_columns;
-          C.num_rows = A.num_rows; 
-          unsigned int size = C.num_rows * C.num_columns;
-          C.elements = (float *)malloc(size * sizeof(float));
+    Matrix C;
+    C.num_columns = C.pitch = A.num_columns;
+    C.num_rows = A.num_rows; 
+    unsigned int size = C.num_rows * C.num_columns;
+    C.elements = (float *)malloc(size * sizeof(float));
 
-          for (unsigned int i = 0; i < A.num_columns; i++)
-                     for (unsigned int j = 0; j < B.num_rows; j++){
-                                double sum = 0.0f;
-                                for (unsigned int k = 0; k < A.num_columns; k++){
-                                          double a = A.elements[i * A.num_columns + k];
-                                          double b = B.elements[k * B.num_rows + j];
-                                          sum += a * b;
-                                }
-                                C.elements[i * B.num_rows + j] = (float)sum;
-                     }
-          return C;
-}
+    for (unsigned int i = 0; i < A.num_columns; i++)
+    {
+        for (unsigned int j = 0; j < B.num_rows; j++)
+        {
+            double sum = 0.0f;
+            for (unsigned int k = 0; k < A.num_columns; k++)
+            {
+                double a = A.elements[i * A.num_columns + k];
+                double b = B.elements[k * B.num_rows + j];
+                sum += a * b;
+            }
+            C.elements[i * B.num_rows + j] = (float)sum;
+        }
+    }
     
+    return C;
+}   
