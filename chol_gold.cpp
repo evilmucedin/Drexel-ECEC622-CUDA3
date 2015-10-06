@@ -1,7 +1,7 @@
 /* Reference code for the Cholesky decomposition. */
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
 #include "chol.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -14,10 +14,14 @@ extern Matrix create_positive_definite_matrix(unsigned int, unsigned int);
 extern void print_matrix(const Matrix);
 
 /* Prints the matrix out to screen. */
-void print_matrix(const Matrix M){
-	for(unsigned int i = 0; i < M.num_rows; i++){
+void print_matrix(const Matrix M)
+{
+	for(unsigned int i = 0; i < M.num_rows; i++)
+    {
 		for(unsigned int j = 0; j < M.num_columns; j++)
+        {
 			printf("%f ", M.elements[i*M.num_rows + j]);
+        }
 		printf("\n");
 	} 
 	printf("\n");
