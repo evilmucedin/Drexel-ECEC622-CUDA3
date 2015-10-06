@@ -48,246 +48,246 @@ Matrix U_on_device_fast; // The upper triangular matrix computed by the device (
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv) 
-{	
-	// Check command line arguments
-	if (argc > 1)
+{   
+    // Check command line arguments
+    if (argc > 1)
     {
-		printf("Error. This program accepts no arguments. \n");
-		exit(0);
-	}		
-	
-	// Initialize the random number generator with a seed value 
-	srand(time(NULL));
+        printf("Error. This program accepts no arguments. \n");
+        exit(0);
+    }       
+    
+    // Initialize the random number generator with a seed value 
+    srand(time(NULL));
 
-	// Create the positive definite matrix. May require a few tries if we are unlucky
-	int success = 0;
-	while (!success)
+    // Create the positive definite matrix. May require a few tries if we are unlucky
+    int success = 0;
+    while (!success)
     {
-		A = create_positive_definite_matrix(MATRIX_SIZE, MATRIX_SIZE);
-		if (A.elements != NULL)
-	        success = 1;
-	}
+        A = create_positive_definite_matrix(MATRIX_SIZE, MATRIX_SIZE);
+        if (A.elements != NULL)
+            success = 1;
+    }
 
-	reference  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the CPU result
-	U_on_device =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the device result
-	U_on_device_fast =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
+    reference  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the CPU result
+    U_on_device =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the device result
+    U_on_device_fast =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
 
-	//Compute the Cholesky decomposition on the CPU
-	StopWatchInterface* timer = NULL;
-	sdkCreateTimer(&timer);
-	sdkStartTimer(&timer);
-	printf("== CPU ==\n");
-	int status = 1;
-	status = chol_gold(A, reference);
-	sdkStopTimer(&timer);
-	time_cpu = 1e-3 * sdkGetTimerValue(&timer);
-	printf("	Run time:    %0.10f s. \n", time_cpu);
-	if (status == 0)
+    //Compute the Cholesky decomposition on the CPU
+    StopWatchInterface* timer = NULL;
+    sdkCreateTimer(&timer);
+    sdkStartTimer(&timer);
+    printf("== CPU ==\n");
+    int status = 1;
+    status = chol_gold(A, reference);
+    sdkStopTimer(&timer);
+    time_cpu = 1e-3 * sdkGetTimerValue(&timer);
+    printf("    Run time:    %0.10f s. \n", time_cpu);
+    if (status == 0)
     {
         printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
         exit(0);
-	}
+    }
 
-	/*
-	printf("Double checking for correctness by recovering the original matrix. \n");
-	if(check_chol(A, reference) == 0){
-		printf("CPU: FAILED\n");
-		exit(0);
-	}
-	*/
-	printf("	PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
-	
+    /*
+    printf("Double checking for correctness by recovering the original matrix. \n");
+    if(check_chol(A, reference) == 0){
+        printf("CPU: FAILED\n");
+        exit(0);
+    }
+    */
+    printf("    PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
+    
 
-	//Slow
-	//Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
-	chol_on_device(A, U_on_device);
-	
-	
-	//Optimized
-	//Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
-	chol_on_device_optimized(A, U_on_device_fast);
-	
-	// Free host matrices
-	free(A.elements); 	
-	free(U_on_device.elements);
-	free(U_on_device_fast.elements);	
-	free(reference.elements); 
-	return 1;
+    //Slow
+    //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
+    chol_on_device(A, U_on_device);
+    
+    
+    //Optimized
+    //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
+    chol_on_device_optimized(A, U_on_device_fast);
+    
+    // Free host matrices
+    free(A.elements);   
+    free(U_on_device.elements);
+    free(U_on_device_fast.elements);    
+    free(reference.elements); 
+    return 1;
 }
 
 //Error helper
 void check_for_error(const char* msg)
 {
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err)
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
     {
-		printf("CUDA ERROR: %s (%s). \n", msg, cudaGetErrorString(err));
-		exit(EXIT_FAILURE);
-	}
+        printf("CUDA ERROR: %s (%s). \n", msg, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
 } 
 
 /* Write code to perform Cholesky decopmposition on the device. */
 void chol_on_device(const Matrix A, Matrix U)
 {
-	//Slow
-	//Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
-	StopWatchInterface* timer_gpu;
-	sdkCreateTimer(&timer_gpu);
-	
-	//A and U are already allocated on CPU already
-	//Allocate space on gpu
-	Matrix gpu_u = allocate_matrix_on_gpu(U);
+    //Slow
+    //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
+    StopWatchInterface* timer_gpu;
+    sdkCreateTimer(&timer_gpu);
+    
+    //A and U are already allocated on CPU already
+    //Allocate space on gpu
+    Matrix gpu_u = allocate_matrix_on_gpu(U);
 
-	//Copy matrices to gpu, copy A right into U
-	copy_matrix_to_device(gpu_u, A);
-	
-	//Maximum size expected is 8192x8192
-	//Will be splitting the elimination i loop
-	//Which has up to MATRIX_SIZE iterations
-	//So we would optimally use 8192 threads
-	//Thus requiring 16 blocks
-	//Rather than attempting to syncronize 16 blocks
-	//Where each thread does one operation per outer K iteration
-	//Just have one block and have each thread do 16 operations 
-	//(in the worst case)
-	int num_blocks = 1;
-	
-	//Max per block threads
-	int threads_per_block = 512;
-	
-	//Operations per thread
-	int ops_per_thread = MATRIX_SIZE / (threads_per_block*num_blocks);
-	
-	printf("== GPU (Slow) ==\n");
-	printf("	Threads per block: %d\n", threads_per_block);
-	printf("	Number of blocks: %d\n", num_blocks);
-	printf("	Operations per thread: %d\n", ops_per_thread);
-	
-	//Set up the execution grid on the GPU
-	dim3 thread_block(threads_per_block, 1, 1);
-	dim3 grid(num_blocks, 1);
-	
-	//Start timer after copy
-	sdkStartTimer(&timer_gpu);
-	check_for_error("SLOW KERNEL FAILURE 1\n");
-	
-	// Launch the kernel <<<grid, thread_block>>>
-	chol_kernel<<<grid, thread_block>>>(gpu_u.elements, ops_per_thread);
-	check_for_error("SLOW KERNEL FAILURE 2\n");
-	
+    //Copy matrices to gpu, copy A right into U
+    copy_matrix_to_device(gpu_u, A);
+    
+    //Maximum size expected is 8192x8192
+    //Will be splitting the elimination i loop
+    //Which has up to MATRIX_SIZE iterations
+    //So we would optimally use 8192 threads
+    //Thus requiring 16 blocks
+    //Rather than attempting to syncronize 16 blocks
+    //Where each thread does one operation per outer K iteration
+    //Just have one block and have each thread do 16 operations 
+    //(in the worst case)
+    int num_blocks = 1;
+    
+    //Max per block threads
+    int threads_per_block = 512;
+    
+    //Operations per thread
+    int ops_per_thread = MATRIX_SIZE / (threads_per_block*num_blocks);
+    
+    printf("== GPU (Slow) ==\n");
+    printf("    Threads per block: %d\n", threads_per_block);
+    printf("    Number of blocks: %d\n", num_blocks);
+    printf("    Operations per thread: %d\n", ops_per_thread);
+    
+    //Set up the execution grid on the GPU
+    dim3 thread_block(threads_per_block, 1, 1);
+    dim3 grid(num_blocks, 1);
+    
+    //Start timer after copy
+    sdkStartTimer(&timer_gpu);
+    check_for_error("SLOW KERNEL FAILURE 1\n");
+    
+    // Launch the kernel <<<grid, thread_block>>>
+    chol_kernel<<<grid, thread_block>>>(gpu_u.elements, ops_per_thread);
+    check_for_error("SLOW KERNEL FAILURE 2\n");
+    
     //Sync at end and check for errors
-	cudaThreadSynchronize();
-	check_for_error("SLOW KERNEL FAILURE 3\n");
-	
-	//Stop timer before copy back
-	sdkStopTimer(&timer_gpu);
-	
-	//Copy data back
-	copy_matrix_from_device(U, gpu_u);
-	
-	//Free memory on device
-	cudaFree(gpu_u.elements);
-	
-	float time_gpu = 1e-3 * sdkGetTimerValue(&timer_gpu);
-	printf("	Run time:    %0.10f s. \n", time_gpu);
-	printf("	Speedup: %0.10f\n", time_cpu/time_gpu);
-	//Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
-	unsigned int size = reference.num_rows * reference.num_columns;
-	bool res = compareData<float, float>(reference.elements, U_on_device.elements, size, 0.1f, 0.f);
-	printf("	%s\n", (res) ? "PASSED" : "FAILED");
+    cudaThreadSynchronize();
+    check_for_error("SLOW KERNEL FAILURE 3\n");
+    
+    //Stop timer before copy back
+    sdkStopTimer(&timer_gpu);
+    
+    //Copy data back
+    copy_matrix_from_device(U, gpu_u);
+    
+    //Free memory on device
+    cudaFree(gpu_u.elements);
+    
+    float time_gpu = 1e-3 * sdkGetTimerValue(&timer_gpu);
+    printf("    Run time:    %0.10f s. \n", time_gpu);
+    printf("    Speedup: %0.10f\n", time_cpu/time_gpu);
+    //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
+    unsigned int size = reference.num_rows * reference.num_columns;
+    bool res = compareData<float, float>(reference.elements, U_on_device.elements, size, 0.1f, 0.f);
+    printf("    %s\n", (res) ? "PASSED" : "FAILED");
 }
 
 /* Write code to perform Cholesky decopmposition on the device. */
 void chol_on_device_optimized(const Matrix A, Matrix U)
 {
-	StopWatchInterface* timer_gpu_fast;
-	sdkCreateTimer(&timer_gpu_fast);
-	
-	printf("== GPU (Fast) ==\n");
-	//A and U are already allocated on CPU already
-	//Allocate space on gpu for U
-	Matrix gpu_u = allocate_matrix_on_gpu( U );
+    StopWatchInterface* timer_gpu_fast;
+    sdkCreateTimer(&timer_gpu_fast);
+    
+    printf("== GPU (Fast) ==\n");
+    //A and U are already allocated on CPU already
+    //Allocate space on gpu for U
+    Matrix gpu_u = allocate_matrix_on_gpu( U );
 
-	//Copy matrices to gpu, copy A right into U
-	copy_matrix_to_device( gpu_u, A );
-	
-	//Start timer after copy
-	sdkStartTimer(&timer_gpu_fast);
-	
-	//Each thread within a block will take some j iterations
-	int threads_per_block = 256; //Optimal
-	//Stride size should equal threads per block - just cause?
-	int stride = threads_per_block;
-	printf("	Threads per block / stride: %d\n", threads_per_block);
+    //Copy matrices to gpu, copy A right into U
+    copy_matrix_to_device( gpu_u, A );
+    
+    //Start timer after copy
+    sdkStartTimer(&timer_gpu_fast);
+    
+    //Each thread within a block will take some j iterations
+    int threads_per_block = 256; //Optimal
+    //Stride size should equal threads per block - just cause?
+    int stride = threads_per_block;
+    printf("    Threads per block / stride: %d\n", threads_per_block);
 
-	
-	//Each kernel call will be one iteration of out K loop
-	for (int k = 0; k < MATRIX_SIZE; k++)
-	{
-		//Want threads to stride across memory
-		//i is outer loop
-			//j is inner loop
-		//so threads should split the j loop
-		//Each thread block will take an i iteration
-		int isize = (MATRIX_SIZE-1) - (k+1) + 1;
-		int num_blocks = isize;
-		if (num_blocks <= 0)
-		{
-			num_blocks = 1;
-		}
-		
-		//Set up the execution grid on the GPU
-		//printf("	Threads per block: %d\n",threads_per_block);
-		//printf("	Number of blocks: %d\n",num_blocks);
-		dim3 thread_block(threads_per_block, 1, 1);
-		dim3 grid(num_blocks,1);
-		
-		//Call the div kernel for this k iteration
-		chol_kernel_optimized_div<<<grid, thread_block>>>(
-			gpu_u.elements,
-			k,
-			stride);
-		
-		//Call kernel with for this K iteration
-		chol_kernel_optimized<<<grid, thread_block>>>(
-			gpu_u.elements,
-			k,
-			stride);
-			
-			
-		//Sync at end and check for errors
-		cudaThreadSynchronize();
-		check_for_error("FAST KERNEL FAILURE");
-	}
-	
-	//Sync at end
-	cudaThreadSynchronize();
-	
-	//Stop timer before copy back					 
-	sdkStopTimer(&timer_gpu_fast);
-	
-	//Copy data back
-	copy_matrix_from_device(U, gpu_u);
-	
-	//Free memory on device
-	checkCudaErrors(cudaFree(gpu_u.elements));
-	
-	//As the final step, zero out the lower triangular portion of U
-	for (int i = 0; i < MATRIX_SIZE; i++)
+    
+    //Each kernel call will be one iteration of out K loop
+    for (int k = 0; k < MATRIX_SIZE; k++)
+    {
+        //Want threads to stride across memory
+        //i is outer loop
+            //j is inner loop
+        //so threads should split the j loop
+        //Each thread block will take an i iteration
+        int isize = (MATRIX_SIZE-1) - (k+1) + 1;
+        int num_blocks = isize;
+        if (num_blocks <= 0)
+        {
+            num_blocks = 1;
+        }
+        
+        //Set up the execution grid on the GPU
+        //printf("  Threads per block: %d\n",threads_per_block);
+        //printf("  Number of blocks: %d\n",num_blocks);
+        dim3 thread_block(threads_per_block, 1, 1);
+        dim3 grid(num_blocks,1);
+        
+        //Call the div kernel for this k iteration
+        chol_kernel_optimized_div<<<grid, thread_block>>>(
+            gpu_u.elements,
+            k,
+            stride);
+        
+        //Call kernel with for this K iteration
+        chol_kernel_optimized<<<grid, thread_block>>>(
+            gpu_u.elements,
+            k,
+            stride);
+            
+            
+        //Sync at end and check for errors
+        cudaThreadSynchronize();
+        check_for_error("FAST KERNEL FAILURE");
+    }
+    
+    //Sync at end
+    cudaThreadSynchronize();
+    
+    //Stop timer before copy back                    
+    sdkStopTimer(&timer_gpu_fast);
+    
+    //Copy data back
+    copy_matrix_from_device(U, gpu_u);
+    
+    //Free memory on device
+    checkCudaErrors(cudaFree(gpu_u.elements));
+    
+    //As the final step, zero out the lower triangular portion of U
+    for (int i = 0; i < MATRIX_SIZE; i++)
     {
         for (int j = 0; j < i; j++)
         {
-		    U.elements[i * MATRIX_SIZE + j] = 0.0;
+            U.elements[i * MATRIX_SIZE + j] = 0.0;
         }
     }
-						 
-	float time_gpu_fast = 1e-3 * sdkGetTimerValue(&timer_gpu_fast);
-	printf("	Run time:    %0.10f s. \n", time_gpu_fast);
-	printf("	Speedup: %0.10f\n", time_cpu/time_gpu_fast);
-	//Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
-	unsigned int size_fast = reference.num_rows * reference.num_columns;
-	bool res_fast = compareData<float, float>(reference.elements, U_on_device_fast.elements, size_fast, 0.1f, 0.f);
-	printf("	%s\n", (res_fast) ? "PASSED" : "FAILED");
+                         
+    float time_gpu_fast = 1e-3 * sdkGetTimerValue(&timer_gpu_fast);
+    printf("    Run time:    %0.10f s. \n", time_gpu_fast);
+    printf("    Speedup: %0.10f\n", time_cpu/time_gpu_fast);
+    //Check if the device result is equivalent to the expected solution. If you can't meet the desired tolerance, try using double precision support.
+    unsigned int size_fast = reference.num_rows * reference.num_columns;
+    bool res_fast = compareData<float, float>(reference.elements, U_on_device_fast.elements, size_fast, 0.1f, 0.f);
+    printf("    %s\n", (res_fast) ? "PASSED" : "FAILED");
 }
 
 // Allocate a device matrix of same size as M.
@@ -301,30 +301,30 @@ Matrix allocate_matrix_on_gpu(const Matrix M)
 }
 
 // Allocate a matrix of dimensions height*width
-//	If init == 0, initialize to all zeroes.  
-//	If init == 1, perform random initialization.
+//  If init == 0, initialize to all zeroes.  
+//  If init == 1, perform random initialization.
 Matrix allocate_matrix(int num_rows, int num_columns, int init)
 {
     Matrix M;
     M.num_columns = M.pitch = num_columns;
     M.num_rows = num_rows;
     int size = M.num_rows * M.num_columns;
-		
-	M.elements = (float*)malloc(size * sizeof(float));
-	for (unsigned int i = 0; i < size; i++)
+        
+    M.elements = (float*)malloc(size * sizeof(float));
+    for (unsigned int i = 0; i < size; i++)
     {
-		if (init == 0)
+        if (init == 0)
         {
             M.elements[i] = 0; 
         }
         else
         {
-			M.elements[i] = (float)rand()/(float)RAND_MAX - 0.5f;
+            M.elements[i] = (float)rand()/(float)RAND_MAX - 0.5f;
         }
-	}
+    }
 
     return M;
-}	
+}   
 
 // Copy a host matrix to a device matrix.
 void copy_matrix_to_device(Matrix Mdevice, const Matrix Mhost)
@@ -345,10 +345,10 @@ void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice)
 
 void check_error(const char *msg)
 {
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err) 
-	{
-		printf("CUDA ERROR: %s (%s).\n", msg, cudaGetErrorString(err));
-		exit(EXIT_FAILURE);
-	}						 
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err) 
+    {
+        printf("CUDA ERROR: %s (%s).\n", msg, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }                        
 }
