@@ -1,6 +1,6 @@
 -- ECEC-622 CUDA Lab 3 -- README --
 
-* 10/2/2015 *
+* 10/2/2015
 
 Den Raskovalov
 
@@ -9,7 +9,7 @@ Support fo CUDA >=6.5.
 John Carto
 Julian Kemmerer
 
-* 6/5/13 *
+* 6/5/13
 
 To build:
 
