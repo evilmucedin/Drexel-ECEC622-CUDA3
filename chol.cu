@@ -61,7 +61,7 @@ int main(int argc, char** argv)
 
 	// Create the positive definite matrix. May require a few tries if we are unlucky
 	int success = 0;
-	while(!success)
+	while (!success)
     {
 		A = create_positive_definite_matrix(MATRIX_SIZE, MATRIX_SIZE);
 		if (A.elements != NULL)
@@ -82,10 +82,12 @@ int main(int argc, char** argv)
 	sdkStopTimer(&timer);
 	time_cpu = 1e-3 * sdkGetTimerValue(&timer);
 	printf("	Run time:    %0.10f s. \n", time_cpu);
-	if (status == 0) {
+	if (status == 0)
+    {
         printf("Cholesky decomposition failed. The input matrix is not positive definite. \n");
         exit(0);
 	}
+
 	/*
 	printf("Double checking for correctness by recovering the original matrix. \n");
 	if(check_chol(A, reference) == 0){
@@ -216,7 +218,7 @@ void chol_on_device_optimized(const Matrix A, Matrix U)
 	int threads_per_block = 256; //Optimal
 	//Stride size should equal threads per block - just cause?
 	int stride = threads_per_block;
-	printf("	Threads per block / stride: %d\n",threads_per_block);
+	printf("	Threads per block / stride: %d\n", threads_per_block);
 
 	
 	//Each kernel call will be one iteration of out K loop
@@ -268,14 +270,16 @@ void chol_on_device_optimized(const Matrix A, Matrix U)
 	copy_matrix_from_device(U, gpu_u);
 	
 	//Free memory on device
-	cudaFree(gpu_u.elements);
-	
+	checkCudaErrors(cudaFree(gpu_u.elements));
 	
 	//As the final step, zero out the lower triangular portion of U
-	int i, j;
-	for(i = 0; i < MATRIX_SIZE; i++)
-			  for(j = 0; j < i; j++)
-						 U.elements[i * MATRIX_SIZE + j] = 0.0;
+	for (int i = 0; i < MATRIX_SIZE; i++)
+    {
+        for (int j = 0; j < i; j++)
+        {
+		    U.elements[i * MATRIX_SIZE + j] = 0.0;
+        }
+    }
 						 
 	float time_gpu_fast = 1e-3 * sdkGetTimerValue(&timer_gpu_fast);
 	printf("	Run time:    %0.10f s. \n", time_gpu_fast);
@@ -315,7 +319,7 @@ Matrix allocate_matrix(int num_rows, int num_columns, int init)
         }
         else
         {
-			M.elements[i] = (float)rand()/(float)RAND_MAX;
+			M.elements[i] = (float)rand()/(float)RAND_MAX - 0.5f;
         }
 	}
 

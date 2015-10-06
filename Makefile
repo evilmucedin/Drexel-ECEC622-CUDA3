@@ -9,7 +9,7 @@ chol.o : chol.cu chol_kernel.cu
 	nvcc -c -O3 chol.cu -o chol.o $(FLAGS)
 
 chol : chol.o chol_gold.o
-	nvcc -g chol.o chol_gold.o -o chol
+	nvcc -g -O3 chol.o chol_gold.o -o chol
 
 clean:
 	rm chol *.o
