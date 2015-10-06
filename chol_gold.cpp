@@ -209,8 +209,12 @@ int check_chol(const Matrix A, const Matrix U)
     // Determine the transpose of U
     unsigned int i, j;
     for (i = 0; i < U.num_rows; i++)
+    {
         for (j = 0; j < U.num_columns; j++)
+        {
             U_transpose.elements[i * U.num_rows + j] = U.elements[j * U.num_columns + i];
+        }
+    }
 
     // Multiply U and U_transpose
     Matrix A_recovered = matrix_multiply(U_transpose, U);
@@ -221,6 +225,7 @@ int check_chol(const Matrix A, const Matrix U)
     {
         if (fabs(A.elements[i] - A_recovered.elements[i]) > 0.01)
         {
+            printf("bad value %f %f\n", A.elements[i], A_recovered.elements[i]);
             return 0;
         }
     }

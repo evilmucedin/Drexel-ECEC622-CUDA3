@@ -41,9 +41,9 @@ __global__ void chol_kernel(float* U, int ops_per_thread)
 		//Elimination step
 		//for(i = (k + 1); i < U.num_rows; i++)
 		//Top limit on i for whole (original) loop
-		int itop = num_rows-1;
+		int itop = num_rows - 1;
 		//Bottom limit on i for whole (original) loop
-		int ibottom = k+1; 
+		int ibottom = k + 1; 
 		
 		//Each thread does so many iterations of elimination step
 		//Starting index for this thread
@@ -54,10 +54,10 @@ __global__ void chol_kernel(float* U, int ops_per_thread)
 		//Check boundaries, else do nothing
 		if ((istart >= ibottom) && (iend <= itop))
 		{
-			for (i = istart; i <= iend; i++)
+			for (i = istart; i <= iend; ++i)
 			{
 				//Do work  for this i iteration
-				for (j = i; j < num_rows; j++)
+				for (j = i; j < num_rows; ++j)
 				{
 					U[i * num_rows + j] -= U[k * num_rows + i] * U[k * num_rows + j];
 				}
@@ -142,7 +142,7 @@ chol_kernel_optimized_div(float * U, int k, int stride)
 	unsigned int num_rows = MATRIX_SIZE;
 	
 	//Only let one thread do this
-	if (tx==0)
+	if (tx == 0)
 	{
 		// Take the square root of the diagonal element
 		U[k * num_rows + k] = sqrt(U[k * num_rows + k]);
@@ -189,7 +189,7 @@ chol_kernel_optimized(float* U, int k, int stride)
 	//This call acts as a single K iteration
 	//Each block does a single i iteration
 	//Need to consider offset, 
-	int i = blockIdx.x + (k+1);
+	int i = blockIdx.x + (k + 1);
 	//Each thread does some part of j
 	//Stide in units of 'stride'
 	//Thread 0 does 0, 16, 32

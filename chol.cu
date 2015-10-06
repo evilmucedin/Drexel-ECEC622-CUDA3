@@ -99,7 +99,6 @@ int main(int argc, char** argv)
     //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
     chol_on_device(A, U_on_device);
     
-    
     //Optimized
     //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
     chol_on_device_optimized(A, U_on_device_fast);
@@ -203,10 +202,10 @@ void chol_on_device_optimized(const Matrix A, Matrix U)
     printf("== GPU (Fast) ==\n");
     //A and U are already allocated on CPU already
     //Allocate space on gpu for U
-    Matrix gpu_u = allocate_matrix_on_gpu( U );
+    Matrix gpu_u = allocate_matrix_on_gpu(U);
 
     //Copy matrices to gpu, copy A right into U
-    copy_matrix_to_device( gpu_u, A );
+    copy_matrix_to_device(gpu_u, A);
     
     //Start timer after copy
     sdkStartTimer(&timer_gpu_fast);
@@ -217,7 +216,11 @@ void chol_on_device_optimized(const Matrix A, Matrix U)
     int stride = threads_per_block;
     printf("    Threads per block / stride: %d\n", threads_per_block);
 
-    
+    //Set up the execution grid on the GPU
+    //printf("  Threads per block: %d\n",threads_per_block);
+    //printf("  Number of blocks: %d\n",num_blocks);
+    dim3 thread_block(threads_per_block, 1, 1);
+        
     //Each kernel call will be one iteration of out K loop
     for (int k = 0; k < MATRIX_SIZE; k++)
     {
@@ -233,24 +236,13 @@ void chol_on_device_optimized(const Matrix A, Matrix U)
             num_blocks = 1;
         }
         
-        //Set up the execution grid on the GPU
-        //printf("  Threads per block: %d\n",threads_per_block);
-        //printf("  Number of blocks: %d\n",num_blocks);
-        dim3 thread_block(threads_per_block, 1, 1);
-        dim3 grid(num_blocks,1);
+        dim3 grid(num_blocks, 1);
         
         //Call the div kernel for this k iteration
-        chol_kernel_optimized_div<<<grid, thread_block>>>(
-            gpu_u.elements,
-            k,
-            stride);
+        chol_kernel_optimized_div<<<grid, thread_block>>>(gpu_u.elements, k, stride);
         
         //Call kernel with for this K iteration
-        chol_kernel_optimized<<<grid, thread_block>>>(
-            gpu_u.elements,
-            k,
-            stride);
-            
+        chol_kernel_optimized<<<grid, thread_block>>>(gpu_u.elements, k, stride);
             
         //Sync at end and check for errors
         cudaThreadSynchronize();
