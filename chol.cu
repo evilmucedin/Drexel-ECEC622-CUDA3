@@ -16,6 +16,9 @@
 #include <helper_timer.h>
 #include <helper_image.h>
 
+// OpenBLAS
+#include <common.h>
+
 #include "chol_gold.h"
 
 // includes, kernels
@@ -30,7 +33,8 @@ void copy_matrix_from_device(Matrix Mhost, const Matrix Mdevice);
 void chol_on_device(const Matrix, Matrix);
 void chol_on_device_optimized(const Matrix, Matrix);
 
-void check_error(const char *msg);
+void check_error(const char*);
+void chol_BLAS(const Matrix);
 
 //Globals
 float time_cpu;
@@ -84,16 +88,21 @@ int main(int argc, char** argv)
         exit(0);
     }
 
-    printf("Double checking for correctness by recovering the original matrix. \n");
-    if (check_chol(A, reference) == 0)
+    if (MATRIX_SIZE <= 1500)
     {
-        printf("CPU: FAILED\n");
-        exit(0);
+        printf("Double checking for correctness by recovering the original matrix. \n");
+        if (check_chol(A, reference) == 0)
+        {
+            printf("CPU: FAILED\n");
+            exit(0);
+        }
+        else
+        {
+            printf("    PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
+        }
     }
-    else
-    {
-        printf("    PASSED\n"); //IT IS SO PERFECT WE DON'T EVEN CHECK.
-    }
+
+    chol_BLAS(A);
 
     //Slow
     //Perform the Cholesky decomposition on the GPU. The resulting upper triangular matrix should be retured in U_on_gpu
@@ -109,6 +118,38 @@ int main(int argc, char** argv)
     free(U_on_device_fast.elements);    
     free(reference.elements); 
     return 1;
+}
+
+void chol_BLAS(const Matrix m)
+{
+    blasint n = MATRIX_SIZE;
+    blasint info = 0;
+    Matrix b = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
+    memcpy(b.elements, m.elements, sizeof(m.elements[0])*MATRIX_SIZE*MATRIX_SIZE);
+
+    printf("== OpenBLAS ==\n");
+    printf("\tCOMPSIZE: %d\n", static_cast<int>(COMPSIZE));
+
+    StopWatchInterface* timer_gpu;
+    sdkCreateTimer(&timer_gpu);
+    sdkStartTimer(&timer_gpu);
+    BLASFUNC(spotrf)("L", &n, b.elements, &n, &info);
+    sdkStopTimer(&timer_gpu);
+    
+    if (0 != info)
+    {
+        printf("OpenBLAS failure");
+        exit(EXIT_FAILURE);
+    }
+    
+    
+    float time_gpu = 1e-3 * sdkGetTimerValue(&timer_gpu);
+    printf("    Run time:    %0.10f s. \n", time_gpu);
+    printf("    Speedup: %0.10f\n", time_cpu/time_gpu);
+
+    bool res = compareData<float, float>(reference.elements, b.elements, MATRIX_SIZE, 0.1f, 0.f);
+    printf("    %s\n", (res) ? "PASSED" : "FAILED");
+    free(b.elements);
 }
 
 //Error helper
