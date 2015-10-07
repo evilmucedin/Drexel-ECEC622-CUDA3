@@ -89,8 +89,12 @@ Matrix create_positive_definite_matrix(unsigned int num_rows, unsigned int num_c
     transpose.elements = (float *)malloc(size * sizeof(float));
 
     for (i = 0; i < M.num_rows; i++)
-        for(j = 0; j < M.num_columns; j++)
+    {
+        for (j = 0; j < M.num_columns; j++)
+        {
             transpose.elements[i * M.num_rows + j] = M.elements[j * M.num_columns + i];
+        }
+    }
     // print_matrix(transpose);
 
     for (i = 0; i < size; i++)

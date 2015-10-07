@@ -66,12 +66,14 @@ int main(int argc, char** argv)
     {
         A = create_positive_definite_matrix(MATRIX_SIZE, MATRIX_SIZE);
         if (A.elements != NULL)
+        {
             success = 1;
+        }
     }
 
-    reference  = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the CPU result
-    U_on_device =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the device result
-    U_on_device_fast =  allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
+    reference = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the CPU result
+    U_on_device = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0); // Create a matrix to store the device result
+    U_on_device_fast = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
 
     //Compute the Cholesky decomposition on the CPU
     StopWatchInterface* timer = NULL;
